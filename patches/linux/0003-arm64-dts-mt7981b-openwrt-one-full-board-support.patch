@@ -2,13 +2,12 @@ From: nerves_system_openwrt_one
 Subject: [PATCH] arm64: dts: mt7981b-openwrt-one: full board peripheral support
 
 Replace the minimal mainline mt7981b.dtsi and mt7981b-openwrt-one.dts
-with the OpenWrt 24.10 versions of the same files. Adds full peripheral
-definitions including SPI NAND, both Ethernet ports, WiFi, LEDs, buttons,
-RTC, watchdog, and the Etron NAND chip definition.
+with the OpenWrt 24.10 versions including SPI NAND, both Ethernets,
+WiFi, LEDs, buttons, RTC, watchdog, and the Etron NAND chip layout.
 
 ---
---- a/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 17:15:23.729031159 +0200
-+++ b/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 17:15:23.731031156 +0200
+--- a/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 19:09:02.696486072 +0200
++++ b/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 19:09:02.698486068 +0200
 @@ -1,8 +1,20 @@
 -// SPDX-License-Identifier: GPL-2.0-only OR MIT
 +// SPDX-License-Identifier: (GPL-2.0 OR MIT)
@@ -147,9 +146,8 @@ RTC, watchdog, and the Etron NAND chip definition.
 +			status = "disabled";
  		};
  
--		clock-controller@1001e000 {
+ 		apmixedsys: clock-controller@1001e000 {
 -			compatible = "mediatek,mt7981-apmixedsys";
-+		apmixedsys: clock-controller@1001e000 {
 +			compatible = "mediatek,mt7981-apmixedsys", "syscon";
  			reg = <0 0x1001e000 0 0x1000>;
  			#clock-cells = <1>;
@@ -244,9 +242,10 @@ RTC, watchdog, and the Etron NAND chip definition.
 +					  <&infracfg CLK_INFRA_UART2_SEL>;
 +			assigned-clock-parents = <&topckgen CLK_TOP_CB_CKSQ_40M>,
 +						 <&topckgen CLK_TOP_UART_SEL>;
-+			status = "disabled";
-+		};
-+
+ 			status = "disabled";
+ 		};
+ 
+-		i2c@11007000 {
 +		snand: snfi@11005000 {
 +			compatible = "mediatek,mt7986-snand";
 +			reg = <0 0x11005000 0 0x1000>, <0 0x11006000 0 0x1000>;
@@ -262,10 +261,9 @@ RTC, watchdog, and the Etron NAND chip definition.
 +						 <&topckgen CLK_TOP_CB_M_D8>;
 +			#address-cells = <1>;
 +			#size-cells = <0>;
- 			status = "disabled";
- 		};
- 
--		i2c@11007000 {
++			status = "disabled";
++		};
++
 +		i2c0: i2c@11007000 {
  			compatible = "mediatek,mt7981-i2c";
  			reg = <0 0x11007000 0 0x1000>,
@@ -318,33 +316,32 @@ RTC, watchdog, and the Etron NAND chip definition.
  				 <&infracfg CLK_INFRA_SPI1_CK>,
  				 <&infracfg CLK_INFRA_SPI1_HCK_CK>;
  			clock-names = "parent-clk", "sel-clk", "spi-clk", "hclk";
-@@ -184,6 +323,130 @@
+@@ -184,9 +323,8 @@
  			status = "disabled";
  		};
  
+-		thermal@1100c800 {
+-			compatible = "mediatek,mt7981-thermal",
+-				     "mediatek,mt7986-thermal";
 +		thermal: thermal@1100c800 {
 +			compatible = "mediatek,mt7981-thermal", "mediatek,mt7986-thermal";
-+			reg = <0 0x1100c800 0 0x800>;
-+			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
-+			clocks = <&infracfg CLK_INFRA_THERM_CK>,
-+				 <&infracfg CLK_INFRA_ADC_26M_CK>;
-+			clock-names = "therm", "auxadc";
-+			nvmem-cells = <&thermal_calibration>;
-+			nvmem-cell-names = "calibration-data";
-+			#thermal-sensor-cells = <1>;
-+			mediatek,auxadc = <&auxadc>;
-+			mediatek,apmixedsys = <&apmixedsys>;
-+		};
-+
-+		auxadc: adc@1100d000 {
-+			compatible = "mediatek,mt7981-auxadc",
+ 			reg = <0 0x1100c800 0 0x800>;
+ 			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&infracfg CLK_INFRA_THERM_CK>,
+@@ -201,14 +339,114 @@
+ 
+ 		auxadc: adc@1100d000 {
+ 			compatible = "mediatek,mt7981-auxadc",
+-				     "mediatek,mt7986-auxadc";
 +				     "mediatek,mt7986-auxadc",
 +				     "mediatek,mt7622-auxadc";
-+			reg = <0 0x1100d000 0 0x1000>;
+ 			reg = <0 0x1100d000 0 0x1000>;
+-			clocks = <&infracfg CLK_INFRA_ADC_26M_CK>;
+-			clock-names = "main";
 +			clocks = <&infracfg CLK_INFRA_ADC_26M_CK>,
 +				 <&infracfg CLK_INFRA_ADC_FRC_CK>;
 +			clock-names = "main", "32k";
-+			#io-channel-cells = <1>;
+ 			#io-channel-cells = <1>;
 +		};
 +
 +		xhci: usb@11200000 {
@@ -367,9 +364,9 @@ RTC, watchdog, and the Etron NAND chip definition.
 +			phys = <&u2port0 PHY_TYPE_USB2>,
 +			       <&u3port0 PHY_TYPE_USB3>;
 +			vusb33-supply = <&reg_3p3v>;
-+			status = "disabled";
-+		};
-+
+ 			status = "disabled";
+ 		};
+ 
 +		afe: audio-controller@11210000 {
 +			compatible = "mediatek,mt79xx-audio";
 +			reg = <0 0x11210000 0 0x9000>;
@@ -449,7 +446,7 @@ RTC, watchdog, and the Etron NAND chip definition.
  		pio: pinctrl@11d00000 {
  			compatible = "mediatek,mt7981-pinctrl";
  			reg = <0 0x11d00000 0 0x1000>,
-@@ -195,54 +458,365 @@
+@@ -220,58 +458,365 @@
  			      <0 0x11f00000 0 0x1000>,
  			      <0 0x11f10000 0 0x1000>,
  			      <0 0x1000b000 0 0x1000>;
@@ -553,14 +550,11 @@ RTC, watchdog, and the Etron NAND chip definition.
  			reg = <0 0x11f20000 0 0x1000>;
  			#address-cells = <1>;
  			#size-cells = <1>;
--		};
 +			status = "okay";
  
--		clock-controller@15000000 {
--			compatible = "mediatek,mt7981-ethsys", "syscon";
-+			thermal_calibration: thermal-calib@274 {
-+				reg = <0x274 0xc>;
-+			};
+ 			thermal_calibration: thermal-calib@274 {
+ 				reg = <0x274 0xc>;
+ 			};
 +
 +			phy_calibration: phy-calib@8dc {
 +				reg = <0x8dc 0x10>;
@@ -580,8 +574,10 @@ RTC, watchdog, and the Etron NAND chip definition.
 +				reg = <0x8c9 1>;
 +				bits = <2 6>;
 +			};
-+		};
-+
+ 		};
+ 
+-		clock-controller@15000000 {
+-			compatible = "mediatek,mt7981-ethsys", "syscon";
 +		ethsys: clock-controller@15000000 {
 +			compatible = "mediatek,mt7981-ethsys",
 +				     "syscon";
@@ -590,8 +586,9 @@ RTC, watchdog, and the Etron NAND chip definition.
  			#reset-cells = <1>;
 +			#address-cells = <1>;
 +			#size-cells = <1>;
-+		};
-+
+ 		};
+ 
+-		wifi@18000000 {
 +		wed: wed@15010000 {
 +			compatible = "mediatek,mt7981-wed",
 +				     "mediatek,mt7986-wed",
@@ -705,9 +702,8 @@ RTC, watchdog, and the Etron NAND chip definition.
 +			reg = <0 0x151a5000 0 0x1000>;
 +			interrupt-parent = <&gic>;
 +			interrupts = <GIC_SPI 211 IRQ_TYPE_LEVEL_HIGH>;
- 		};
- 
--		wifi@18000000 {
++		};
++
 +		wo_ilm0: syscon@151e0000 {
 +			compatible = "mediatek,mt7986-wo-ilm", "syscon";
 +			reg = <0 0x151e0000 0 0x8000>;
@@ -831,8 +827,8 @@ RTC, watchdog, and the Etron NAND chip definition.
 +		compatible = "mediatek,mt7981-rng";
  	};
  };
---- a/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 17:15:23.730031158 +0200
-+++ b/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 17:15:23.732031155 +0200
+--- a/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 19:09:02.697486070 +0200
++++ b/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 19:09:02.699486067 +0200
 @@ -1,15 +1,464 @@
 -// SPDX-License-Identifier: GPL-2.0-only OR MIT
 +// SPDX-License-Identifier: (GPL-2.0 OR MIT)

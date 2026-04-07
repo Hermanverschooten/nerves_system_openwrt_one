@@ -1,50 +1,42 @@
-From: OpenWRT One Buildroot
+From: nerves_system_openwrt_one
 Subject: [PATCH] mtd: spinand: Add Etron driver with EM73C044SNB
 
-Adds support for Etron Technology SPI NAND chip used on the OpenWRT One:
-EM73C044SNB (1 Gbit, manufacturer 0xd5, device ID 0x11).
+Adds support for Etron Technology SPI NAND chip used on the OpenWRT
+One: EM73C044SNB (1 Gbit, manufacturer 0xd5, device ID 0x11).
 
 Note on chip ID format: when read via OPCODE_DUMMY method on the
 OpenWRT One's spi-mt65xx controller (without OpenWrt's SPI calibration
-backports), the chip returns the bytes `77 d5 11 00 00` — there is one
-extra leading byte 0x77 before the actual manufacturer/device ID. To
-work around this without porting the entire SPI calibration framework,
-we register a manufacturer with ID 0x77 ("Etron via mt65xx") and the
-chip with device ID bytes `d5 11`. This matches the bytes the
-controller actually delivers to the spi-nand core.
+backports), the chip returns the bytes `77 d5 11 00 00` -- there is
+one extra leading byte 0x77 before the actual manufacturer/device ID.
+To work around this without porting the entire SPI calibration
+framework, we register a manufacturer with ID 0x77 and the chip with
+device ID bytes `d5 11`.
 
-Based on OpenWrt's pending-6.6 patch by Daniel Danzberger
+Based on OpenWrt pending-6.6 patch by Daniel Danzberger
 <daniel@dd-wrt.com>.
 
 ---
- drivers/mtd/nand/spi/Makefile    |   4 +-
- drivers/mtd/nand/spi/core.c      |   1 +
- drivers/mtd/nand/spi/etron.c     | 110 +++++++++++++++++++++++++++++++
- include/linux/mtd/spinand.h      |   1 +
- 4 files changed, 115 insertions(+), 1 deletion(-)
- create mode 100644 drivers/mtd/nand/spi/etron.c
-
---- a/drivers/mtd/nand/spi/Makefile
-+++ b/drivers/mtd/nand/spi/Makefile
-@@ -1,4 +1,4 @@
+--- a/drivers/mtd/nand/spi/Makefile	2026-04-07 19:04:48.262894484 +0200
++++ b/drivers/mtd/nand/spi/Makefile	2026-04-07 19:05:10.470858284 +0200
+@@ -1,5 +1,5 @@
  # SPDX-License-Identifier: GPL-2.0
--spinand-objs := core.o alliancememory.o ato.o esmt.o foresee.o gigadevice.o macronix.o
--spinand-objs += micron.o paragon.o toshiba.o winbond.o xtx.o
-+spinand-objs := core.o alliancememory.o ato.o esmt.o etron.o foresee.o gigadevice.o
-+spinand-objs += macronix.o micron.o paragon.o toshiba.o winbond.o xtx.o
+ spinand-objs := core.o otp.o
+-spinand-objs += alliancememory.o ato.o esmt.o fmsh.o foresee.o gigadevice.o macronix.o
++spinand-objs += alliancememory.o ato.o esmt.o etron.o fmsh.o foresee.o gigadevice.o macronix.o
+ spinand-objs += micron.o paragon.o skyhigh.o toshiba.o winbond.o xtx.o
  obj-$(CONFIG_MTD_SPI_NAND) += spinand.o
---- a/drivers/mtd/nand/spi/core.c
-+++ b/drivers/mtd/nand/spi/core.c
-@@ -1112,6 +1112,7 @@ static const struct spinand_manufacturer
+--- a/drivers/mtd/nand/spi/core.c	2026-04-07 19:04:48.263894482 +0200
++++ b/drivers/mtd/nand/spi/core.c	2026-04-07 19:04:56.542880973 +0200
+@@ -1228,6 +1228,7 @@
  	&alliancememory_spinand_manufacturer,
  	&ato_spinand_manufacturer,
  	&esmt_c8_spinand_manufacturer,
 +	&etron_spinand_manufacturer,
+ 	&fmsh_spinand_manufacturer,
  	&foresee_spinand_manufacturer,
  	&gigadevice_spinand_manufacturer,
- 	&macronix_spinand_manufacturer,
---- /dev/null
-+++ b/drivers/mtd/nand/spi/etron.c
+--- a/drivers/mtd/nand/spi/etron.c	2026-04-03 16:05:13.882000123 +0200
++++ b/drivers/mtd/nand/spi/etron.c	2026-04-07 19:05:22.316839024 +0200
 @@ -0,0 +1,110 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
@@ -64,20 +56,20 @@ Based on OpenWrt's pending-6.6 patch by Daniel Danzberger
 +
 +
 +static SPINAND_OP_VARIANTS(read_cache_variants,
-+		SPINAND_PAGE_READ_FROM_CACHE_QUADIO_OP(0, 1, NULL, 0),
-+		SPINAND_PAGE_READ_FROM_CACHE_X4_OP(0, 1, NULL, 0),
-+		SPINAND_PAGE_READ_FROM_CACHE_DUALIO_OP(0, 1, NULL, 0),
-+		SPINAND_PAGE_READ_FROM_CACHE_X2_OP(0, 1, NULL, 0),
-+		SPINAND_PAGE_READ_FROM_CACHE_OP(true, 0, 1, NULL, 0),
-+		SPINAND_PAGE_READ_FROM_CACHE_OP(false, 0, 1, NULL, 0));
++		SPINAND_PAGE_READ_FROM_CACHE_1S_4S_4S_OP(0, 1, NULL, 0, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_1S_1S_4S_OP(0, 1, NULL, 0, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_1S_2S_2S_OP(0, 1, NULL, 0, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_1S_1S_2S_OP(0, 1, NULL, 0, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_FAST_1S_1S_1S_OP(0, 1, NULL, 0, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_1S_1S_1S_OP(0, 1, NULL, 0, 0));
 +
 +static SPINAND_OP_VARIANTS(write_cache_variants,
-+		SPINAND_PROG_LOAD_X4(true, 0, NULL, 0),
-+		SPINAND_PROG_LOAD(true, 0, NULL, 0));
++		SPINAND_PROG_LOAD_1S_1S_4S_OP(true, 0, NULL, 0),
++		SPINAND_PROG_LOAD_1S_1S_1S_OP(true, 0, NULL, 0));
 +
 +static SPINAND_OP_VARIANTS(update_cache_variants,
-+		SPINAND_PROG_LOAD_X4(false, 0, NULL, 0),
-+		SPINAND_PROG_LOAD(false, 0, NULL, 0));
++		SPINAND_PROG_LOAD_1S_1S_4S_OP(false, 0, NULL, 0),
++		SPINAND_PROG_LOAD_1S_1S_1S_OP(false, 0, NULL, 0));
 +
 +static int etron_ooblayout_ecc(struct mtd_info *mtd, int section,
 +					struct mtd_oob_region *oobregion)
@@ -156,13 +148,13 @@ Based on OpenWrt's pending-6.6 patch by Daniel Danzberger
 +	.nchips = ARRAY_SIZE(etron_spinand_table),
 +	.ops = &etron_spinand_manuf_ops,
 +};
---- a/include/linux/mtd/spinand.h
-+++ b/include/linux/mtd/spinand.h
-@@ -264,6 +264,7 @@ struct spinand_manufacturer {
+--- a/include/linux/mtd/spinand.h	2026-04-07 19:04:48.264894480 +0200
++++ b/include/linux/mtd/spinand.h	2026-04-07 19:05:10.472858281 +0200
+@@ -355,6 +355,7 @@
  extern const struct spinand_manufacturer alliancememory_spinand_manufacturer;
  extern const struct spinand_manufacturer ato_spinand_manufacturer;
  extern const struct spinand_manufacturer esmt_c8_spinand_manufacturer;
 +extern const struct spinand_manufacturer etron_spinand_manufacturer;
+ extern const struct spinand_manufacturer fmsh_spinand_manufacturer;
  extern const struct spinand_manufacturer foresee_spinand_manufacturer;
  extern const struct spinand_manufacturer gigadevice_spinand_manufacturer;
- extern const struct spinand_manufacturer macronix_spinand_manufacturer;

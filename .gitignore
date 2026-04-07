@@ -13,3 +13,4 @@ deps/
 # Mise
 mise.toml
 build.log
+mix.lock
