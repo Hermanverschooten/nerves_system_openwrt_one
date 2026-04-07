@@ -18,10 +18,17 @@
 #   7. mkimage everything into a FIT (.itb) using the system's openwrt-one.its
 #
 # Usage:
-#   ./scripts/wrap-firmware.sh <input.fw> <output.itb>
+#   ./scripts/wrap-firmware.sh <input.fw> <output.itb> [output.ubi]
 #
-# Requires (host): unzip, unsquashfs, cpio, gzip, mkimage, sudo (for mknod &
-# preserving file ownership in the cpio).
+# If <output.ubi> is given, the script also produces a multi-volume UBI
+# image suitable for `mtd write` to /dev/mtd5 from a running Linux
+# (or `mtd write spi-nand0 ... 0x100000 ...` from U-Boot). The UBI
+# layout matches the OpenWrt 24.10 factory: ubootenv/ubootenv2/fip/fit/
+# rootfs_data, where `fit` is the .itb we just built and `fip` is the
+# pre-built ATF blob from prebuilt/openwrt-one-fip.bin.
+#
+# Requires (host): unzip, unsquashfs, cpio, gzip, mkimage, ubinize,
+# sudo (for mknod & preserving file ownership in the cpio).
 #
 # This is a Phase 2 development convenience script. Phase 3 will replace
 # this with proper fwup.conf integration so `mix firmware` produces the
@@ -29,13 +36,14 @@
 
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <input.fw> <output.itb>" >&2
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    echo "Usage: $0 <input.fw> <output.itb> [output.ubi]" >&2
     exit 1
 fi
 
 FW_FILE="$1"
 OUT_ITB="$2"
+OUT_UBI="${3:-}"
 
 if [ ! -f "$FW_FILE" ]; then
     echo "ERROR: $FW_FILE does not exist" >&2
@@ -120,7 +128,68 @@ cp "$ITS_TEMPLATE" "$WORK/openwrt-one.its"
 
 OUT_SIZE=$(stat -c%s "$OUT_ITB" 2>/dev/null || stat -f%z "$OUT_ITB")
 echo "==> Wrote $OUT_ITB ($((OUT_SIZE / 1024 / 1024)) MiB)"
+
+# 8 (optional): wrap the .itb in a multi-volume UBI image for SPI NAND.
+if [ -n "$OUT_UBI" ]; then
+    UBINIZE=""
+    if command -v ubinize >/dev/null 2>&1; then
+        UBINIZE=ubinize
+    else
+        # Try the system's built host tree (Buildroot puts ubinize in host/sbin)
+        for cand in \
+            "${SYSTEM_DIR}/.nerves/artifacts/nerves_system_openwrt_one-portable-"*/host/sbin/ubinize \
+            "${SYSTEM_DIR}/.nerves/artifacts/nerves_system_openwrt_one-portable-"*/host/bin/ubinize; do
+            if [ -x "$cand" ]; then
+                UBINIZE="$cand"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$UBINIZE" ]; then
+        echo "WARNING: ubinize not found (install mtd-utils or build the system first), skipping UBI image generation" >&2
+    else
+        UBI_CFG_TEMPLATE="${SYSTEM_DIR}/ubinize-fit.cfg"
+        if [ ! -f "$UBI_CFG_TEMPLATE" ]; then
+            echo "WARNING: $UBI_CFG_TEMPLATE not found, skipping UBI image generation" >&2
+        else
+            echo "==> Building UBI image (multi-volume layout for SPI NAND)..."
+            UBI_CFG="$WORK/ubinize-fit.cfg"
+            # The template uses BOARD_DIR and BINARIES_DIR placeholders that
+            # we substitute. Point BOARD_DIR at the system tree (so it can
+            # find prebuilt/openwrt-one-fip.bin) and BINARIES_DIR at $WORK
+            # (where we just produced the .itb). The .itb in $WORK has the
+            # name openwrt-one-initramfs.itb because that's what the .cfg
+            # references; symlink/copy our $OUT_ITB to that name.
+            cp "$OUT_ITB" "$WORK/openwrt-one-initramfs.itb"
+            sed -e "s|BOARD_DIR|${SYSTEM_DIR}|g" \
+                -e "s|BINARIES_DIR|${WORK}|g" \
+                "$UBI_CFG_TEMPLATE" > "$UBI_CFG"
+            "$UBINIZE" -p 128KiB -m 2048 -o "$OUT_UBI" "$UBI_CFG"
+            UBI_SIZE=$(stat -c%s "$OUT_UBI" 2>/dev/null || stat -f%z "$OUT_UBI")
+            echo "==> Wrote $OUT_UBI ($((UBI_SIZE / 1024 / 1024)) MiB)"
+        fi
+    fi
+fi
+
 echo ""
-echo "To boot via TFTP from U-Boot:"
+echo "To boot via TFTP from U-Boot (no NAND changes):"
 echo "  tftpboot \$loadaddr $(basename "$OUT_ITB")"
 echo "  bootm"
+if [ -n "$OUT_UBI" ] && [ -f "$OUT_UBI" ]; then
+    echo ""
+    echo "To install on NAND from a running OpenWrt (or any Linux on this board):"
+    echo "  scp $(basename "$OUT_UBI") root@<ip>:/tmp/"
+    echo "  ssh root@<ip>"
+    echo "    ubidetach -p /dev/mtd5 2>/dev/null || true"
+    echo "    flash_erase /dev/mtd5 0 0"
+    echo "    nandwrite -p /dev/mtd5 /tmp/$(basename "$OUT_UBI")"
+    echo "    reboot"
+    echo ""
+    echo "To install on a blank NAND from U-Boot:"
+    echo "  tftpboot \$loadaddr $(basename "$OUT_UBI")"
+    echo "  ubi detach"
+    echo "  mtd erase ubi"
+    echo "  mtd write spi-nand0 \$loadaddr 0x100000 \$filesize"
+    echo "  reset"
+fi
