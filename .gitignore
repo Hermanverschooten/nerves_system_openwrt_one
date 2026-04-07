@@ -1,0 +1,15 @@
+# Build artifacts
+.nerves/
+_build/
+deps/
+*.fw
+*.itb
+*.ubi
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Mise
+mise.toml
+build.log

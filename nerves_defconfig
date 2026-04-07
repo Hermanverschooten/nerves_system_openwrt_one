@@ -1,0 +1,96 @@
+BR2_aarch64=y
+BR2_cortex_a53=y
+BR2_ARM_FPU_VFPV4=y
+BR2_TOOLCHAIN_EXTERNAL=y
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM=y
+BR2_TOOLCHAIN_EXTERNAL_DOWNLOAD=y
+BR2_TOOLCHAIN_EXTERNAL_URL="https://github.com/nerves-project/toolchains/releases/download/v13.2.0/nerves_toolchain_aarch64_nerves_linux_gnu-linux_${shell uname -m}-13.2.0-CE4B5F8.tar.xz"
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX="aarch64-nerves-linux-gnu"
+BR2_TOOLCHAIN_EXTERNAL_GCC_13=y
+BR2_TOOLCHAIN_EXTERNAL_HEADERS_5_4=y
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM_GLIBC=y
+# BR2_TOOLCHAIN_EXTERNAL_INET_RPC is not set
+BR2_TOOLCHAIN_EXTERNAL_CXX=y
+BR2_TOOLCHAIN_EXTERNAL_FORTRAN=y
+BR2_TOOLCHAIN_EXTERNAL_OPENMP=y
+BR2_TAR_OPTIONS="--no-same-owner"
+BR2_BACKUP_SITE="http://dl.nerves-project.org"
+BR2_ENABLE_DEBUG=y
+BR2_GLOBAL_PATCH_DIR="${BR2_EXTERNAL_NERVES_PATH}/patches ${NERVES_DEFCONFIG_DIR}/patches"
+BR2_REPRODUCIBLE=y
+BR2_ROOTFS_SKELETON_CUSTOM=y
+BR2_ROOTFS_SKELETON_CUSTOM_PATH="${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/skeleton"
+BR2_INIT_NONE=y
+BR2_ROOTFS_DEVICE_TABLE="${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/device_table.txt"
+BR2_ENABLE_LOCALE_WHITELIST="locale-archive"
+BR2_GENERATE_LOCALE="en_US.UTF-8"
+BR2_ROOTFS_OVERLAY="${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/rootfs_overlay ${NERVES_DEFCONFIG_DIR}/rootfs_overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="${NERVES_DEFCONFIG_DIR}/post-build.sh ${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="${NERVES_DEFCONFIG_DIR}/post-createfs.sh"
+
+# Linux 6.12 mainline. Our DTS lives in patches/linux/ as a patch that
+# replaces the in-tree mt7981b.dtsi and mt7981b-openwrt-one.dts (mainline
+# only ships minimal versions). Using INTREE_DTS_NAME with the patched
+# files is simpler than CUSTOM_DTS_PATH because Buildroot 2024.05.2's
+# CUSTOM_DTS_PATH copies files to arch/<arch>/boot/dts/ top-level which
+# breaks the ARM64 vendor-subdir Makefile structure.
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.12"
+BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="${NERVES_DEFCONFIG_DIR}/linux-6.12.defconfig"
+BR2_LINUX_KERNEL_DTS_SUPPORT=y
+BR2_LINUX_KERNEL_INTREE_DTS_NAME="mediatek/mt7981b-openwrt-one"
+BR2_LINUX_KERNEL_DTB_KEEP_DIRNAME=y
+BR2_LINUX_KERNEL_IMAGE_TARGET_CUSTOM=y
+BR2_LINUX_KERNEL_IMAGE_TARGET_NAME="Image"
+BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
+
+# BusyBox configuration (use Nerves defaults)
+BR2_PACKAGE_BUSYBOX_CONFIG="${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/busybox.config"
+
+# Networking userspace
+BR2_PACKAGE_CA_CERTIFICATES=y
+BR2_PACKAGE_NFTABLES=y
+BR2_PACKAGE_WIRELESS_REGDB=y
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_WIRED=y
+BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
+BR2_PACKAGE_WPA_SUPPLICANT_MESH_NETWORKING=y
+BR2_PACKAGE_WPA_SUPPLICANT_AUTOSCAN=y
+BR2_PACKAGE_WPA_SUPPLICANT_HOTSPOT=y
+BR2_PACKAGE_WPA_SUPPLICANT_DEBUG_SYSLOG=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPS=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
+BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
+BR2_PACKAGE_HOSTAPD=y
+BR2_PACKAGE_IW=y
+
+# MTD/UBI userspace tools (needed for fwup writing to UBI volumes
+# at runtime, plus mtd-utils for general flash management)
+BR2_PACKAGE_MTD=y
+
+# Random number generation
+# BR2_PACKAGE_RNG_TOOLS_JITTERENTROPY_LIBRARY is not set
+
+# Filesystem images
+# Squashfs is the default Nerves rootfs format. We additionally produce
+# cpio.gz so we can embed it as an initramfs in our FIT image for NAND
+# boot — the OpenWRT One has 1 GB of RAM so loading the rootfs into RAM
+# is fine for now.
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y
+# BR2_TARGET_ROOTFS_TAR is not set
+
+# Host tools required to build the FIT and UBI images for SPI NAND
+BR2_PACKAGE_HOST_UBOOT_TOOLS=y
+BR2_PACKAGE_HOST_MTD=y
+BR2_PACKAGE_HOST_KMOD_XZ=y
+
+# Nerves system metadata
+BR2_NERVES_SYSTEM_NAME="nerves_system_openwrt_one"
+BR2_NERVES_ADDITIONAL_IMAGE_FILES="${NERVES_DEFCONFIG_DIR}/fwup.conf"
+
+# Nerves runtime helpers
+BR2_PACKAGE_NBTTY=y
+BR2_PACKAGE_NERVES_CONFIG=y

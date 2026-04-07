@@ -1,0 +1,63 @@
+/dts-v1/;
+
+/ {
+    description = "OpenWRT One Buildroot FIT Image";
+    #address-cells = <1>;
+
+    images {
+        kernel-1 {
+            description = "Linux kernel";
+            data = /incbin/("Image");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            /*
+             * Load below the FIT image load address ($loadaddr=0x46000000)
+             * so that relocating the kernel doesn't overwrite the still-needed
+             * ramdisk portion of the in-memory FIT. This matches OpenWrt's
+             * convention. With Erlang in the rootfs the FIT is ~36 MiB which
+             * extends past 0x48000000 and would conflict with the old layout.
+             */
+            load = <0x44000000>;
+            entry = <0x44000000>;
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+
+        fdt-1 {
+            description = "MT7981B OpenWRT One device tree";
+            data = /incbin/("mt7981b-openwrt-one.dtb");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+
+        ramdisk-1 {
+            description = "initramfs";
+            data = /incbin/("rootfs.cpio.gz");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            compression = "gzip";
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+    };
+
+    configurations {
+        default = "config-1";
+
+        config-1 {
+            description = "OpenWRT One boot configuration";
+            kernel = "kernel-1";
+            fdt = "fdt-1";
+            ramdisk = "ramdisk-1";
+        };
+    };
+};

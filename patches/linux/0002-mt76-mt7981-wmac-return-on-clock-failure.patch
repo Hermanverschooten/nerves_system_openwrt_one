@@ -1,0 +1,47 @@
+From: OpenWRT One Buildroot
+Subject: [PATCH] mt76: mt7981-wmac: return on clock failure instead of silently continuing
+
+In mainline 6.12, mt798x_wmac_init() prints an error if it fails to
+acquire the "mcu" or "ap2conn" clock but then continues execution
+anyway. A subsequent silent crash deeper in the probe path was
+the reason WiFi appeared to "fail without any log output" on the
+OpenWRT One when other probe deferrals were also in play.
+
+Make the clock failures actually fail probe so any future regression
+in this area is at least visible.
+
+---
+ drivers/net/wireless/mediatek/mt76/mt7915/soc.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/wireless/mediatek/mt76/mt7915/soc.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7915/soc.c
+@@ -1199,16 +1199,24 @@ static int mt798x_wmac_init(struct mt791
+ 	struct clk *mcu_clk, *ap_conn_clk;
+
+ 	mcu_clk = devm_clk_get(pdev, "mcu");
+-	if (IS_ERR(mcu_clk))
++	if (IS_ERR(mcu_clk)) {
+ 		dev_err(pdev, "mcu clock not found\n");
+-	else if (clk_prepare_enable(mcu_clk))
++		return PTR_ERR(mcu_clk);
++	}
++	if (clk_prepare_enable(mcu_clk)) {
+ 		dev_err(pdev, "mcu clock configuration failed\n");
++		return -EIO;
++	}
+
+ 	ap_conn_clk = devm_clk_get(pdev, "ap2conn");
+-	if (IS_ERR(ap_conn_clk))
++	if (IS_ERR(ap_conn_clk)) {
+ 		dev_err(pdev, "ap2conn clock not found\n");
+-	else if (clk_prepare_enable(ap_conn_clk))
++		return PTR_ERR(ap_conn_clk);
++	}
++	if (clk_prepare_enable(ap_conn_clk)) {
+ 		dev_err(pdev, "ap2conn clock configuration failed\n");
++		return -EIO;
++	}
+
+ 	dev->dcm = devm_platform_ioremap_resource(pfdev, 1);
+ 	if (IS_ERR(dev->dcm))
