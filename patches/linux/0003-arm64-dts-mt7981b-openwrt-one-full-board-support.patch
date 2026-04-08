@@ -2,12 +2,16 @@ From: nerves_system_openwrt_one
 Subject: [PATCH] arm64: dts: mt7981b-openwrt-one: full board peripheral support
 
 Replace the minimal mainline mt7981b.dtsi and mt7981b-openwrt-one.dts
-with the OpenWrt 24.10 versions including SPI NAND, both Ethernets,
-WiFi, LEDs, buttons, RTC, watchdog, and the Etron NAND chip layout.
+with the OpenWrt 24.10 versions including SPI NAND on &spi0 (using
+OpenWrt's spi-mt65xx + SPI calibration patches), both Ethernets, WiFi
+with nvmem calibration, LEDs, buttons, RTC, watchdog, and the full
+peripheral set. Linux 6.18 mainline still ships only a 15-line stub
+for the OpenWRT One.
 
 ---
---- a/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 19:09:02.696486072 +0200
-+++ b/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-07 19:09:02.698486068 +0200
+diff -urN a/arch/arm64/boot/dts/mediatek/mt7981b.dtsi b/arch/arm64/boot/dts/mediatek/mt7981b.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-02-16 17:10:28.000000000 +0100
++++ b/arch/arm64/boot/dts/mediatek/mt7981b.dtsi	2026-04-08 12:15:51.769318183 +0200
 @@ -1,8 +1,20 @@
 -// SPDX-License-Identifier: GPL-2.0-only OR MIT
 +// SPDX-License-Identifier: (GPL-2.0 OR MIT)
@@ -827,8 +831,9 @@ WiFi, LEDs, buttons, RTC, watchdog, and the Etron NAND chip layout.
 +		compatible = "mediatek,mt7981-rng";
  	};
  };
---- a/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 19:09:02.697486070 +0200
-+++ b/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-07 19:09:02.699486067 +0200
+diff -urN a/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts b/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts
+--- a/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-02-16 17:10:28.000000000 +0100
++++ b/arch/arm64/boot/dts/mediatek/mt7981b-openwrt-one.dts	2026-04-08 12:15:51.770318182 +0200
 @@ -1,15 +1,464 @@
 -// SPDX-License-Identifier: GPL-2.0-only OR MIT
 +// SPDX-License-Identifier: (GPL-2.0 OR MIT)

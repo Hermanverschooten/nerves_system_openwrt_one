@@ -1412,7 +1412,7 @@ CONFIG_MTD_NAND_ECC=y
 # CONFIG_MTD_NAND_ECC_SW_HAMMING is not set
 # CONFIG_MTD_NAND_ECC_SW_BCH is not set
 # CONFIG_MTD_NAND_ECC_MXIC is not set
-# CONFIG_MTD_NAND_ECC_MEDIATEK is not set
+CONFIG_MTD_NAND_MTK_BMT=y
 # end of ECC engine support
 # end of NAND
 
