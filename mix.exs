@@ -29,7 +29,13 @@ defmodule NervesSystemOpenwrtOne.MixProject do
   end
 
   def application do
-    []
+    # We don't start any OTP processes -- the system is a build-time
+    # artifact -- but we DO ship a tiny piece of runtime Elixir
+    # (`NervesSystemOpenwrtOne.UBootEnvKVBackend`) that user apps need
+    # access to. Returning an empty keyword list (instead of nothing)
+    # tells `mix release` to include this dep's BEAM files even though
+    # the user app declares it with `runtime: false`.
+    [extra_applications: []]
   end
 
   defp bootstrap(args) do
@@ -100,16 +106,17 @@ defmodule NervesSystemOpenwrtOne.MixProject do
     [
       "dts",
       "fwup_include",
-      "linux",
+      "lib",
       "patches",
       "prebuilt",
       "rootfs_overlay",
+      "scripts",
       "CHANGELOG.md",
       "Config.in",
       "fwup-ops.conf",
       "fwup.conf",
       "LICENSE",
-      "linux-6.12.defconfig",
+      "linux-6.18.defconfig",
       "mix.exs",
       "nerves_defconfig",
       "openwrt-one.its",
