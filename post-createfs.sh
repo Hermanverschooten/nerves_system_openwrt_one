@@ -56,6 +56,34 @@ else
     exit 0
 fi
 
+# Generate a placeholder ubootenv binary so ubinize doesn't fail. The system
+# build doesn't know the application's metadata, so this just contains the
+# OpenWrt U-Boot default env (from prebuilt/uboot-env-template.txt) plus a
+# minimal nerves_fw_active=a entry. wrap-firmware.sh overwrites this with
+# the real per-app env (template + meta.conf-derived nerves_fw_*) when it
+# builds the flashable .ubi from a mix firmware .fw output.
+#
+# env_size 0x1F000 (= one UBI LEB) MUST match CONFIG_ENV_SIZE in the
+# OpenWrt U-Boot loaded from our `fip` volume. With the full default env
+# included, U-Boot's CRC check passes and it uses our env directly --
+# bootcmd, boot_*, ubi_* and bootmenu_* all come straight from the
+# template, so the device boots normally with no warnings.
+if [ -x "${HOST_DIR}/bin/mkenvimage" ]; then
+    cat "${NERVES_DEFCONFIG_DIR}/prebuilt/uboot-env-template.txt" \
+        > "${BINARIES_DIR}/uboot-env.txt"
+    printf 'nerves_fw_active=a\n' >> "${BINARIES_DIR}/uboot-env.txt"
+    # -r for redundant env (we have two ubootenv volumes; the 5-byte
+    # header is required for fw_printenv / UBootEnv to read it correctly).
+    "${HOST_DIR}/bin/mkenvimage" -r -s 0x1F000 \
+        -o "${BINARIES_DIR}/uboot-env.bin" \
+        "${BINARIES_DIR}/uboot-env.txt"
+    rm -f "${BINARIES_DIR}/uboot-env.txt"
+else
+    # Fall back to all-0xff (uninitialized) — U-Boot will see an invalid
+    # CRC and rewrite with its compiled-in defaults on first boot.
+    printf '\xff%.0s' $(seq 1 126976) > "${BINARIES_DIR}/uboot-env.bin"
+fi
+
 UBI_CFG="${BINARIES_DIR}/ubinize-fit.cfg"
 sed -e "s|BOARD_DIR|${NERVES_DEFCONFIG_DIR}|g" \
     -e "s|BINARIES_DIR|${BINARIES_DIR}|g" \

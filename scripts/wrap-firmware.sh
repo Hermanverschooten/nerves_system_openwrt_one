@@ -61,12 +61,29 @@ if [ ! -f "$ITS_TEMPLATE" ]; then
 fi
 
 # Tool checks
-for tool in unzip unsquashfs cpio gzip mkimage sudo; do
+for tool in unzip unsquashfs cpio gzip sudo; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "ERROR: required tool '$tool' not found in PATH" >&2
         exit 1
     fi
 done
+
+# mkimage gets special treatment: prefer /usr/bin/mkimage (the distro-built
+# u-boot-tools) over any nerves_system mkimage that may be earlier on PATH
+# when this script is invoked from inside `mix upload`. The system one in
+# Nerves' host/bin is compiled with -DMKIMAGE_DTC="" because Buildroot
+# doesn't set CONFIG_MKIMAGE_DTC_PATH; that mkimage's internal dtc invoke
+# becomes `system(" -I dts ...")` and the shell tries to run `-I` as a
+# command, exploding this script. The distro mkimage has the right dtc
+# path baked in.
+if [ -x /usr/bin/mkimage ]; then
+    MKIMAGE=/usr/bin/mkimage
+elif command -v mkimage >/dev/null 2>&1; then
+    MKIMAGE=$(command -v mkimage)
+else
+    echo "ERROR: required tool 'mkimage' not found in PATH" >&2
+    exit 1
+fi
 
 WORK="$(mktemp -d -t openwrt-one-wrap.XXXXXX)"
 trap 'sudo rm -rf "$WORK"' EXIT
@@ -124,7 +141,7 @@ echo "    rootfs.cpio.gz: $((CPIO_SIZE / 1024 / 1024)) MiB"
 # 7: build the FIT image
 echo "==> Building FIT image..."
 cp "$ITS_TEMPLATE" "$WORK/openwrt-one.its"
-( cd "$WORK" && mkimage -f openwrt-one.its "$OUT_ITB" >/dev/null )
+( cd "$WORK" && "$MKIMAGE" -f openwrt-one.its "$OUT_ITB" >/dev/null )
 
 OUT_SIZE=$(stat -c%s "$OUT_ITB" 2>/dev/null || stat -f%z "$OUT_ITB")
 echo "==> Wrote $OUT_ITB ($((OUT_SIZE / 1024 / 1024)) MiB)"
@@ -155,12 +172,97 @@ if [ -n "$OUT_UBI" ]; then
         else
             echo "==> Building UBI image (multi-volume layout for SPI NAND)..."
             UBI_CFG="$WORK/ubinize-fit.cfg"
+
+            # Generate a populated U-Boot environment binary so freshly
+            # flashed devices already have the Nerves metadata. Without
+            # this, NervesMOTD shows "unknown" until UBootEnv.write/1 is
+            # called manually -- nerves_runtime caches KV at boot so just
+            # writing later doesn't help.
+            #
+            # We parse meta-* lines from the .fw file's meta.conf and emit
+            # an env text file in the format mkenvimage expects, then turn
+            # it into a 64 KiB binary block (matching /etc/fw_env.config's
+            # env_size = 0x10000).
+            MKENVIMAGE=""
+            if command -v mkenvimage >/dev/null 2>&1; then
+                MKENVIMAGE=mkenvimage
+            else
+                for cand in "${SYSTEM_DIR}/.nerves/artifacts/nerves_system_openwrt_one-portable-"*/host/bin/mkenvimage; do
+                    if [ -x "$cand" ]; then MKENVIMAGE="$cand"; break; fi
+                done
+            fi
+
+            if [ -z "$MKENVIMAGE" ]; then
+                echo "WARNING: mkenvimage not found. ubootenv volume will be empty," >&2
+                echo "         meaning Nerves metadata won't be populated until you" >&2
+                echo "         call UBootEnv.write/1 manually after first boot." >&2
+                # Still need an env binary for ubinize, even if empty.
+                printf '\xff%.0s' $(seq 1 126976) > "$WORK/uboot-env.bin"
+            else
+                echo "==> Generating U-Boot env binary from .fw metadata..."
+                # Extract meta-* lines from meta.conf and convert to env format.
+                # meta.conf entries look like:  meta-product=openwrt_one_test
+                #                               meta-version=0.1.0
+                #                               meta-author="Herman verschooten"
+                # We strip surrounding quotes and rename them to nerves_fw_*.
+                ENV_TXT="$WORK/uboot-env.txt"
+                # Start from the OpenWrt U-Boot default env template so the
+                # baked env contains a complete bootcmd / boot_* / ubi_* /
+                # bootmenu_* tree. With those present U-Boot accepts our
+                # env directly (CRC matches at 0x1F000), no warnings from
+                # boardid, and Nerves still gets nerves_fw_* alongside.
+                cat "${SYSTEM_DIR}/prebuilt/uboot-env-template.txt" > "$ENV_TXT"
+                {
+                    printf '\n# nerves_fw_* keys appended at build time:\n'
+                    # Slot tracking: assume single-slot install on first flash.
+                    printf 'nerves_fw_active=a\n'
+
+                    # Pull each meta-* field from meta.conf, transform name.
+                    unzip -p "$FW_FILE" meta.conf | awk '
+                        /^meta-/ {
+                            # Remove "meta-" prefix
+                            sub(/^meta-/, "")
+                            # Split on first "="
+                            eq = index($0, "=")
+                            if (eq == 0) next
+                            key = substr($0, 1, eq - 1)
+                            val = substr($0, eq + 1)
+                            # Strip surrounding double quotes if present
+                            gsub(/^"|"$/, "", val)
+                            # Map fwup meta-* names to Nerves env keys
+                            if (key == "product")       printf "a.nerves_fw_product=%s\n", val
+                            else if (key == "version")  printf "a.nerves_fw_version=%s\n", val
+                            else if (key == "platform") printf "a.nerves_fw_platform=%s\n", val
+                            else if (key == "architecture") printf "a.nerves_fw_architecture=%s\n", val
+                            else if (key == "author")   printf "a.nerves_fw_author=%s\n", val
+                            else if (key == "description") printf "a.nerves_fw_description=%s\n", val
+                            else if (key == "vcs-identifier") printf "a.nerves_fw_vcs_identifier=%s\n", val
+                            else if (key == "misc")     printf "a.nerves_fw_misc=%s\n", val
+                            else if (key == "uuid")     printf "a.nerves_fw_uuid=%s\n", val
+                        }
+                    '
+                } >> "$ENV_TXT"
+                echo "    appended nerves_fw_* keys:"
+                grep '^nerves_fw_\|^a\.nerves_fw_' "$ENV_TXT" | sed 's/^/      /'
+                # -r: redundant env (5-byte header = 4-byte CRC + 1-byte flags)
+                # because we have ubootenv + ubootenv2 volumes. Without -r the
+                # CRC check in fw_printenv / Erlang UBootEnv fails because
+                # the data is offset by one byte.
+                # env_size 0x1F000 (= one UBI LEB) MUST match CONFIG_ENV_SIZE
+                # in OpenWrt's mt7981 U-Boot. We start from the OpenWrt
+                # default env template (with bootcmd, boot_*, ubi_*, etc.)
+                # and append nerves_fw_* keys, so the resulting env satisfies
+                # both U-Boot (full boot scripts present, CRC matches) and
+                # Nerves (nerves_fw_* present for KV reads).
+                "$MKENVIMAGE" -r -s 0x1F000 -o "$WORK/uboot-env.bin" "$ENV_TXT"
+            fi
+
             # The template uses BOARD_DIR and BINARIES_DIR placeholders that
             # we substitute. Point BOARD_DIR at the system tree (so it can
             # find prebuilt/openwrt-one-fip.bin) and BINARIES_DIR at $WORK
-            # (where we just produced the .itb). The .itb in $WORK has the
-            # name openwrt-one-initramfs.itb because that's what the .cfg
-            # references; symlink/copy our $OUT_ITB to that name.
+            # (where we just produced the .itb and uboot-env.bin). The .itb
+            # in $WORK has the name openwrt-one-initramfs.itb because that's
+            # what the .cfg references; copy our $OUT_ITB to that name.
             cp "$OUT_ITB" "$WORK/openwrt-one-initramfs.itb"
             sed -e "s|BOARD_DIR|${SYSTEM_DIR}|g" \
                 -e "s|BINARIES_DIR|${WORK}|g" \
