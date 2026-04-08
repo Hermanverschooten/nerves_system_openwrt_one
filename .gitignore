@@ -10,6 +10,10 @@ deps/
 .DS_Store
 *.swp
 
+# Erlang/Elixir
+erl_crash.dump
+*.tar
+
 # Mise
 mise.toml
 build.log

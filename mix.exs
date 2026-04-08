@@ -1,7 +1,7 @@
 defmodule NervesSystemOpenwrtOne.MixProject do
   use Mix.Project
 
-  @github_organization "hverschooten"
+  @github_organization "Hermanverschooten"
   @app :nerves_system_openwrt_one
   @source_url "https://github.com/#{@github_organization}/#{@app}"
   @version Path.join(__DIR__, "VERSION")
@@ -19,8 +19,13 @@ defmodule NervesSystemOpenwrtOne.MixProject do
       package: package(),
       deps: deps(),
       aliases: [loadconfig: [&bootstrap/1]],
-      docs: docs(),
-      preferred_cli_env: %{
+      docs: docs()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: %{
         docs: :docs,
         "hex.build": :docs,
         "hex.publish": :docs
