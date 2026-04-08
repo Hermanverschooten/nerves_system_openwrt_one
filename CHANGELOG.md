@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.1 (2026-04-08)
+
+USB mass storage support.
+
+* Linux: enable `CONFIG_SCSI`, `CONFIG_BLK_DEV_SD`, `CONFIG_USB_STORAGE`,
+  `CONFIG_FAT_FS` + `CONFIG_VFAT_FS`, `CONFIG_EXFAT_FS`, and the
+  matching NLS tables (`CP437`, `ISO8859-1`, `UTF-8`). USB sticks now
+  enumerate as `/dev/sdN` and FAT/exFAT partitions mount and read.
+
 ## v0.2.0 (2026-04-08)
 
 OTA + A/B slot support, kernel bump, several bug fixes that turned
