@@ -53,12 +53,41 @@ small Nerves overlay (`boot_active_slot`, `nerves_swap_active`,
 
 ## Initial install (one-time, blank board)
 
-The very first install must be done from U-Boot because Linux isn't
-running yet. After `mix firmware`, the system places its
-`openwrt-one-nand.ubi` at
-`./_build/${MIX_TARGET}_${MIX_ENV}/nerves/system/images/`.
+The very first install uses the OpenWRT One's **NOR full-recovery
+mode** — an independent U-Boot in SPI NOR that loads firmware from a
+FAT-formatted USB stick and reflashes the entire SPI NAND. No serial
+console, no TFTP server, no typing of U-Boot commands.
 
-From the U-Boot serial console (115200 8N1):
+### Step 1: build the firmware and prepare a USB stick
+
+```sh
+MIX_TARGET=openwrt_one mix firmware
+MIX_TARGET=openwrt_one mix burn
+```
+
+`mix burn` detects attached removable drives and prompts you to pick
+one. It partitions the stick with a small FAT32 volume and writes two
+files onto it:
+
+- `openwrt-mediatek-filogic-openwrt_one-snand-preloader.bin` (BL2)
+- `openwrt-mediatek-filogic-openwrt_one-factory.ubi` (our full
+  multi-volume UBI image with fip + fit_a + fit_b + ubootenv + rootfs_data)
+
+### Step 2: flash the device
+
+1. Power down the OpenWRT One.
+2. Plug the USB stick into the **Type-A** port (not Type-C).
+3. Move the **boot switch to the NOR** position.
+4. Hold the **front panel button** and apply power.
+5. Release the button when all front-panel LEDs turn off.
+6. Wait for the front LED to turn **green** (~30 seconds).
+7. Move the boot switch back to **NAND**.
+8. Power-cycle the device. It will autoboot Nerves.
+
+### Alternative: serial + TFTP
+
+If you have a serial adapter and TFTP server, you can also flash
+from the U-Boot prompt (115200 8N1):
 
 ```
 setenv ipaddr 192.168.X.Y
@@ -69,8 +98,6 @@ mtd erase ubi
 mtd write spi-nand0 $loadaddr 0x100000 $filesize
 reset
 ```
-
-After this the board autoboots Nerves on every power-on.
 
 ## OTA updates
 

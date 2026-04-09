@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.2.2 (2026-04-09)
+
+`mix burn` support via OpenWrt's NOR full-recovery mode.
+
+* `mix burn` now prepares a FAT32 USB recovery stick that OpenWrt's
+  SPI NOR recovery U-Boot can use to flash the entire SPI NAND —
+  no serial console, no TFTP server, no typing of U-Boot commands.
+  The stick contains the snand-preloader.bin (BL2) and our
+  `openwrt-one-nand.ubi` (renamed to `factory.ubi`). See README.md
+  "Initial install" for the full procedure.
+* Ship `prebuilt/openwrt-one-snand-preloader.bin` from OpenWrt 24.10
+  (same source + license as the FIP).
+* `fwup.conf`: replace the erroring `complete` task with one that
+  `mbr_write`s + `fat_mkfs`es + `fat_write`s the recovery files.
+  The .fw file grows by ~33 MiB (the .ubi) + 234 KiB (preloader)
+  but `mix burn` now Just Works with no per-app config.
+* `post-createfs.sh`: stage the preloader into images/ so fwup can
+  find it at firmware-build time.
+* README: document USB stick recovery as the primary initial-install
+  path; serial + TFTP demoted to "alternative".
+
 ## v0.2.1 (2026-04-08)
 
 USB mass storage support.
