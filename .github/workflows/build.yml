@@ -53,6 +53,13 @@ jobs:
       - name: Fetch dependencies
         run: mix deps.get
 
+      - name: Cache Buildroot downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.nerves/dl
+          key: br-dl-${{ hashFiles('nerves_defconfig', 'mix.exs') }}
+          restore-keys: br-dl-
+
       - name: Build the Nerves system
         run: mix compile
         env:
