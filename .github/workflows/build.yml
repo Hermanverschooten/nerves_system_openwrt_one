@@ -71,29 +71,26 @@ jobs:
             exit 1
           fi
 
-          # Run mksystem.sh from inside the buildroot tree to create the
-          # distributable tarball (images + staging + legal-info + scripts).
-          BUILDROOT_DIR="${ARTIFACT_DIR}/build/buildroot-2025.11.2"
-          if [ -d "$BUILDROOT_DIR" ]; then
-            cd "$BUILDROOT_DIR"
-            make system NERVES_SYSTEM_ARTIFACT="$ARTIFACT_NAME"
-            cd -
-            TARBALL="${ARTIFACT_DIR}/${ARTIFACT_NAME}.tar.gz"
-          fi
+          # Package the artifact directory into a distributable tarball.
+          # We exclude `build/` (intermediate Buildroot objects, ~5 GB)
+          # and `dl/` (downloaded source tarballs) to keep the tarball
+          # small. The remaining dirs (images/, staging/, host/,
+          # legal-info/, scripts/, Makefile, nerves-env.sh, nerves.mk)
+          # are what downstream `mix deps.get` needs.
+          #
+          # We avoid Buildroot's `make system` / mksystem.sh because it
+          # has sprintf buffer-size assumptions about path lengths that
+          # break on GitHub Actions' deep working directories.
+          TARBALL="${ARTIFACT_NAME}.tar.gz"
+          tar czf "$TARBALL" \
+            -C "$(dirname "$ARTIFACT_DIR")" \
+            --exclude='build' \
+            --exclude='dl' \
+            "$ARTIFACT_NAME"
 
-          # Fallback: if mksystem didn't run (different buildroot version
-          # or layout), create a minimal tarball ourselves.
-          if [ ! -f "$TARBALL" ]; then
-            echo "mksystem.sh didn't produce a tarball; creating one manually"
-            TARBALL="${ARTIFACT_NAME}.tar.gz"
-            tar czf "$TARBALL" -C "$(dirname "$ARTIFACT_DIR")" "$ARTIFACT_NAME" \
-              --exclude='build' --exclude='dl'
-          fi
-
-          cp "$TARBALL" "${ARTIFACT_NAME}.tar.gz" 2>/dev/null || true
-          echo "tarball=${ARTIFACT_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          ls -lh "${ARTIFACT_NAME}.tar.gz"
+          ls -lh "$TARBALL"
 
       - name: Compute CHECKSUM
         id: checksum
