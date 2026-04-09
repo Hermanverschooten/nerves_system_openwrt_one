@@ -12,7 +12,7 @@ MediaTek MT7981B (Filogic 820).
 | WiFi           | MT7976C dual-band WiFi 6                                   |
 | Ethernet       | 2.5 GbE WAN (Airoha EN8811H) + 1 GbE LAN (internal PHY)    |
 | Linux kernel   | 6.18 mainline + small patches (mtk_bmt + OpenWrt SPI cal)  |
-| IEx terminal   | UART0 / serial console (115200 8N1)                        |
+| IEx terminal   | UART0 via front USB-C console port (115200 8N1, no adapter)|
 | GPIO, I2C, SPI | Yes - [Elixir Circuits](https://github.com/elixir-circuits)|
 | RTC            | Yes (PCF8563 on I2C)                                       |
 | Watchdog       | Yes (SoC + GPIO)                                           |
@@ -86,8 +86,11 @@ files onto it:
 
 ### Alternative: serial + TFTP
 
-If you have a serial adapter and TFTP server, you can also flash
-from the U-Boot prompt (115200 8N1):
+The OpenWRT One has a built-in USB-to-serial converter on the front
+USB-C port — just plug a USB-C cable, no external UART adapter needed
+(`/dev/cu.usbmodem0001` on macOS, `/dev/ttyACM0` on Linux). If you
+also have a TFTP server on the network, you can flash from the
+U-Boot prompt (115200 8N1):
 
 ```
 setenv ipaddr 192.168.X.Y
