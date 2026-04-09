@@ -1,0 +1,132 @@
+name: Build System
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+env:
+  OTP_VERSION: "28.4.1"
+  ELIXIR_VERSION: "1.19.5"
+  FWUP_VERSION: "1.11.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # GitHub runners have limited disk. Remove things we don't need.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/boost /usr/local/.ghcup 2>/dev/null || true
+          df -h /
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git wget cpio unzip rsync bc file \
+            python3 libssl-dev libncurses-dev \
+            squashfs-tools u-boot-tools device-tree-compiler mtd-utils
+
+      - name: Install Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      - name: Install fwup
+        run: |
+          wget -q "https://github.com/fwup-home/fwup/releases/download/v${FWUP_VERSION}/fwup_${FWUP_VERSION}_amd64.deb"
+          sudo dpkg -i "fwup_${FWUP_VERSION}_amd64.deb"
+          rm "fwup_${FWUP_VERSION}_amd64.deb"
+
+      - name: Install nerves_bootstrap
+        run: mix archive.install hex nerves_bootstrap --force
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      - name: Build the Nerves system
+        run: mix compile
+        env:
+          MIX_TARGET: openwrt_one
+
+      - name: Create system artifact tarball
+        id: artifact
+        run: |
+          VERSION=$(cat VERSION)
+          ARTIFACT_NAME="nerves_system_openwrt_one-portable-${VERSION}"
+          ARTIFACT_DIR=".nerves/artifacts/${ARTIFACT_NAME}"
+
+          if [ ! -d "$ARTIFACT_DIR" ]; then
+            echo "ERROR: artifact dir not found at $ARTIFACT_DIR"
+            ls -la .nerves/artifacts/
+            exit 1
+          fi
+
+          # Run mksystem.sh from inside the buildroot tree to create the
+          # distributable tarball (images + staging + legal-info + scripts).
+          BUILDROOT_DIR="${ARTIFACT_DIR}/build/buildroot-2025.11.2"
+          if [ -d "$BUILDROOT_DIR" ]; then
+            cd "$BUILDROOT_DIR"
+            make system NERVES_SYSTEM_ARTIFACT="$ARTIFACT_NAME"
+            cd -
+            TARBALL="${ARTIFACT_DIR}/${ARTIFACT_NAME}.tar.gz"
+          fi
+
+          # Fallback: if mksystem didn't run (different buildroot version
+          # or layout), create a minimal tarball ourselves.
+          if [ ! -f "$TARBALL" ]; then
+            echo "mksystem.sh didn't produce a tarball; creating one manually"
+            TARBALL="${ARTIFACT_NAME}.tar.gz"
+            tar czf "$TARBALL" -C "$(dirname "$ARTIFACT_DIR")" "$ARTIFACT_NAME" \
+              --exclude='build' --exclude='dl'
+          fi
+
+          cp "$TARBALL" "${ARTIFACT_NAME}.tar.gz" 2>/dev/null || true
+          echo "tarball=${ARTIFACT_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          ls -lh "${ARTIFACT_NAME}.tar.gz"
+
+      - name: Compute CHECKSUM
+        id: checksum
+        run: |
+          sha256sum ${{ steps.artifact.outputs.tarball }} | tee CHECKSUM
+          echo "sha256=$(cut -d' ' -f1 CHECKSUM)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.artifact.outputs.tarball }}
+            CHECKSUM
+          body: |
+            ## nerves_system_openwrt_one v${{ steps.artifact.outputs.version }}
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+            ### Artifact
+
+            ```
+            ${{ steps.artifact.outputs.tarball }}
+            SHA256: ${{ steps.checksum.outputs.sha256 }}
+            ```
+
+            ### Usage
+
+            Add to your project's `mix.exs`:
+
+            ```elixir
+            {:nerves_system_openwrt_one, "~> ${{ steps.artifact.outputs.version }}",
+             runtime: false, targets: :openwrt_one}
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
