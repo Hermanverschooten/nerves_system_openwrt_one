@@ -31,3 +31,21 @@ to confirm it's a valid FIP container.
 and the board can only boot via the SPI NOR recovery path (front
 button hold + NAND/NOR switch). Including the official fip in our
 NAND image keeps the production autoboot path working.
+
+## openwrt-one-snand-preloader.bin
+
+OpenWrt's SPI NAND BL2 preloader (the same binary that ships in the
+factory image as the `bl2` volume contents). It's built from the
+MediaTek ATF fork (same reason we don't build the FIP ourselves).
+
+`mix burn` packages this onto the recovery USB stick under the
+filename **`openwrt-mediatek-filogic-openwrt_one-snand-preloader.bin`**
+because OpenWrt's SPI NOR recovery U-Boot looks for that exact
+filename when the user boots into "NOR full recovery mode" (boot
+switch on NOR + front button held + power on). The recovery U-Boot
+loads the preloader from FAT USB partition 1 and writes it to the
+`bl2` partition (mtd4) on SPI NAND, then continues with the
+`factory.ubi` for the rest.
+
+**Source**:
+<https://downloads.openwrt.org/releases/24.10.0/targets/mediatek/filogic/openwrt-24.10.0-mediatek-filogic-openwrt_one-snand-preloader.bin>

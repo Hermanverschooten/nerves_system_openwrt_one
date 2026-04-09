@@ -16,6 +16,14 @@ FWUP_CONFIG="${NERVES_DEFCONFIG_DIR}/fwup.conf"
 "${BR2_EXTERNAL_NERVES_PATH}/board/nerves-common/post-createfs.sh" \
     "${BINARIES_DIR}" "${FWUP_CONFIG}"
 
+# Stage the snand-preloader.bin into BINARIES_DIR so the fwup.conf
+# `mix burn` task can pick it up via ${NERVES_SYSTEM}/images/. fwup at
+# firmware-build time only reliably sees the images dir, not the
+# system source tree, so prebuilt blobs that need to ride along in
+# the .fw must be copied into BINARIES_DIR here.
+cp "${NERVES_DEFCONFIG_DIR}/prebuilt/openwrt-one-snand-preloader.bin" \
+    "${BINARIES_DIR}/openwrt-one-snand-preloader.bin"
+
 # --- Build the FIT image (kernel + DTB + cpio.gz initramfs) ---
 # This is what U-Boot's `bootm` consumes after reading the "fit" UBI volume.
 
