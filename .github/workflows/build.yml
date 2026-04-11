@@ -130,7 +130,7 @@ jobs:
 
             ```elixir
             {:nerves_system_openwrt_one, "~> ${{ steps.artifact.outputs.version }}",
-             runtime: false, targets: :openwrt_one}
+             targets: :openwrt_one}
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
