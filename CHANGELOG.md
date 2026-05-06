@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.3 (2026-05-06)
+
+Routine upstream bump.
+
+* `nerves_system_br` 1.33.4 → 1.33.7
+  * Erlang/OTP 28.4.1 → 28.5
+  * fwup 1.14.0 → 1.16.0
+  * Buildroot 2025.11.2 → 2025.11.3
+
+No system-side changes required.
+
 ## v0.2.2 (2026-04-09)
 
 `mix burn` support via OpenWrt's NOR full-recovery mode.
